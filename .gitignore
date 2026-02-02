@@ -1,0 +1,11 @@
+# IDE folder
+.vscode
+
+# Air tmp generated folder
+**tmp
+
+# Python cache
+__pycache__
+**.pyc
+
+node-setup
