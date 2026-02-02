@@ -1,0 +1,46 @@
+# ServiceAccount for Data collector
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: data-collector
+  namespace: monitoring
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: data-collector-role
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "delete"]
+
+  - apiGroup: []
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups: []
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+  - apiGroup: []
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: data-collector-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: data-collector-role
+subjects:
+  - kind: ServiceAccount
+    name: data-collector
+    namespace: monitoring
