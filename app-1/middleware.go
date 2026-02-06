@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -13,7 +14,7 @@ type wrappedWriter struct {
 }
 
 func (w *wrappedWriter) WriteHeader(statusCode int) {
-	w.WriteHeader(statusCode)
+	w.ResponseWriter.WriteHeader(statusCode)
 	w.StatusCode = statusCode
 }
 
@@ -44,10 +45,10 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		duration := time.Since(start)
 		logger.Info("Request completed",
 			slog.String("method", r.Method),
-			slog.String("status_code", ""),
+			slog.Int("status_code", wrapped.StatusCode),
 			slog.String("path", r.URL.String()),
 			slog.String("user_agent", r.UserAgent()),
-			slog.Duration("duration", time.Duration(duration.Milliseconds())),
+			slog.String("duration", fmt.Sprintf("%dms", duration.Milliseconds())),
 		)
 	})
 }

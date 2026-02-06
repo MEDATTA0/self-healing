@@ -1,19 +1,27 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 )
 
+type HealthResponseDto struct {
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
 func greet(w http.ResponseWriter, r *http.Request) {
-	i := 1e7
+	i := 1e4
 	for i >= 1 {
 		i--
 	}
-	w.WriteHeader(http.StatusAccepted)
-	w.Header().Set("Content-Type", "plain/text")
-	fmt.Fprintf(w, "Hello World! %s", time.Now())
+	response := &HealthResponseDto{Message: "Hello World", Timestamp: time.Now()}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+	// fmt.Fprintf(w, "Hello World! %s", time.Now())
 }
 
 func main() {

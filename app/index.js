@@ -9,7 +9,7 @@ app.use(cors({ origin: "*" }));
 app.use(morgan("combined"));
 
 app.get("/hello", (req, res) => {
-  let i = 1e7;
+  let i = 1e4;
   while (i > 0) {
     i--;
   }
