@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: my-app-1
-          image: self-healing-app-1:v1
+          image: self-healing-app-1:v3
           resources:
             requests:
               memory: "100Mi"
