@@ -2,7 +2,10 @@ package internals
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
+	"os"
+	"sort"
 	"time"
 
 	"github.com/prometheus/client_golang/api"
@@ -37,11 +40,104 @@ func NewMetricsCollector(k8sClient *kubernetes.Clientset) *MetricsCollector {
 func (this *MetricsCollector) Watch() {
 	// this.watchDeploymentMetrics()
 	this.watchPodMetrics()
+	this.CreateMetricsBackup("my-app")
 	this.cron.Start()
 }
 
+type MetricRow struct {
+	Timestamp string
+	PodName   string
+	UCpu      string
+	LCpu      string
+	UMem      string
+	LMem      string
+}
+
+func (this *MetricsCollector) CreateMetricsBackup(deploymentName string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Key is "timestamp_podname"
+	dataMap := make(map[string]*MetricRow)
+
+	queries := []struct {
+		Key   string
+		Query string
+	}{
+		{"uCpu", fmt.Sprintf("sum(rate(container_cpu_usage_seconds_total{pod=~'%s-.*'}[5m])) by (pod)", deploymentName)},
+		{"uMem", fmt.Sprintf("sum(container_memory_working_set_bytes{pod=~'%s-.*'}) by (pod)", deploymentName)},
+		{"lCpu", fmt.Sprintf("sum(kube_pod_container_resource_limits{pod=~'%s-.*', resource='cpu'}) by (pod)", deploymentName)},
+		{"lMem", fmt.Sprintf("sum(kube_pod_container_resource_limits{pod=~'%s-.*', resource='memory'}) by (pod)", deploymentName)},
+	}
+
+	dateRange := v1.Range{
+		Start: time.Now().Add(-7 * 24 * time.Hour).UTC(),
+		End:   time.Now().UTC(),
+		Step:  10 * time.Minute, // Increased step to keep file size sane
+	}
+
+	for _, q := range queries {
+		result, _, err := this.promClient.QueryRange(ctx, q.Query, dateRange)
+		if err != nil {
+			fmt.Printf("Query error: %v\n", err)
+			continue
+		}
+
+		matrix := result.(model.Matrix)
+		for _, series := range matrix {
+			podName := string(series.Metric["pod"])
+
+			for _, sample := range series.Values {
+				ts := sample.Timestamp.Time().UTC().Format(time.RFC3339)
+				mapKey := ts + "_" + podName
+
+				// Initialize row if it doesn't exist
+				if _, exists := dataMap[mapKey]; !exists {
+					dataMap[mapKey] = &MetricRow{Timestamp: ts, PodName: podName}
+				}
+
+				// Assign value to the correct column
+				valStr := sample.Value.String()
+				switch q.Key {
+				case "uCpu":
+					dataMap[mapKey].UCpu = valStr
+				case "uMem":
+					dataMap[mapKey].UMem = valStr
+				case "lCpu":
+					dataMap[mapKey].LCpu = valStr
+				case "lMem":
+					dataMap[mapKey].LMem = valStr
+				}
+			}
+		}
+	}
+
+	keys := make([]string, 0, len(dataMap))
+	for k := range dataMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Convert Map to CSV slice
+	allValues := [][]string{{"date", "pod_name", "cpu_usage", "cpu_limit", "memory_usage", "memory_limit"}}
+	for _, k := range keys {
+		row := dataMap[k]
+		allValues = append(allValues, []string{
+			row.Timestamp, row.PodName, row.UCpu, row.LCpu, row.UMem, row.LMem,
+		})
+	}
+
+	// Write to file
+	file, _ := os.Create("training_data.csv")
+	defer file.Close()
+	writer := csv.NewWriter(file)
+	writer.WriteAll(allValues)
+	writer.Flush()
+	fmt.Println("Backup complete: training_data.csv")
+}
+
 func (this *MetricsCollector) watchDeploymentMetrics() {
-	_, err := this.cron.AddFunc("@every 10s", func() {
+	_, err := this.cron.AddFunc("@every 30s", func() {
 		ctx := context.Background()
 		deps, err := this.k8sClient.AppsV1().Deployments("default").List(ctx, metav1.ListOptions{})
 
@@ -72,9 +168,15 @@ func (this *MetricsCollector) watchDeploymentMetrics() {
 	}
 }
 
+/*
+ */
 func (this *MetricsCollector) watchPodMetrics() {
-	_, err := this.cron.AddFunc("@every 10s", func() {
+	_, err := this.cron.AddFunc("@every 30s", func() {
 		ctx := context.Background()
+		// var labelSelector string
+		// if len(deploymentName) != 0 {
+		// 	labelSelector = deploymentName
+		// }
 		pods, err := this.k8sClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
 
 		if err != nil {
