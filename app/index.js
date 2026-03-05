@@ -17,6 +17,16 @@ app.get("/hello", (req, res) => {
   return res.status(200).json({ message: "Hello World" });
 });
 
+app.get("/error", (_, res) => {
+  let i = 1e3;
+  while (i > 0) {
+    i--;
+  }
+  return res
+    .status(500)
+    .json({ message: "Something went wrong, please try later" });
+});
+
 app.listen(PORT, () => {
   console.log(`server running on port: ${PORT}`);
 });
