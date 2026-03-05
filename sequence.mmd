@@ -1,0 +1,67 @@
+sequenceDiagram
+    autonumber
+    participant Dev as DevOps Engineer
+    participant DC as Data Collector
+    participant ML as ML Training
+    participant CTRL as Healing Controller
+    participant P as Prometheus
+    participant K as K8s API
+    participant App as Target Pod
+    participant CSV as Dataset Storage
+    participant Model as Model Storage
+
+    Note over Dev, Model: PHASE 1: Data Collection (Current)
+    
+    rect rgb(240, 248, 255)
+        DC->>P: Query pod metrics (CPU, Memory)
+        P-->>DC: Metrics data
+        DC->>K: Get pod logs (errors, requests)
+        K-->>DC: Log data
+        DC->>DC: Merge & label (IsHealthy)
+        DC->>CSV: Append to training_data.csv
+        Note right of DC: Runs every 5 minutes
+    end
+
+    Note over Dev, Model: PHASE 2: ML Training (Planned)
+    
+    rect rgb(255, 250, 240)
+        Dev->>ML: Trigger training job
+        ML->>CSV: Load training dataset
+        CSV-->>ML: Historical data (N samples)
+        ML->>ML: Feature engineering
+        ML->>ML: Train IsolationForest
+        ML->>ML: Evaluate (precision/recall)
+        ML->>Model: Save trained model.pkl
+        Model-->>Dev: Training complete
+    end
+
+    Note over Dev, Model: PHASE 3: Self-Healing (Planned)
+    
+    rect rgb(240, 255, 240)
+        CTRL->>Model: Load anomaly model
+        Model-->>CTRL: Model loaded
+        
+        loop Every 30 seconds
+            CTRL->>P: Query current metrics
+            P-->>CTRL: CPU: 85%, Memory: 90%
+            CTRL->>K: Get recent logs
+            K-->>CTRL: "ERROR: Connection timeout x12"
+            
+            CTRL->>CTRL: Build state vector
+            CTRL->>Model: Predict([0.85, 0.90, 12, ...])
+            Model-->>CTRL: Anomaly detected (score: -0.45)
+            
+            alt Anomaly Detected
+                CTRL->>CTRL: Select action (RESTART)
+                CTRL->>K: DELETE Pod (app-xyz)
+                K->>App: Send SIGTERM
+                App-->>K: Terminated
+                K-->>CTRL: New pod starting...
+                CTRL->>Dev: Log healing action
+            else Healthy State
+                CTRL->>CTRL: Continue monitoring
+            end
+        end
+    end
+
+    Note over Dev, Model: System operates autonomously with human oversight

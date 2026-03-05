@@ -1,0 +1,105 @@
+classDiagram
+    %% Phase 1: Data Collection
+    class DataCollector {
+        -metricsCollector : MetricsCollector
+        -logsCollector : LogsCollector
+        -datasetBuilder : DatasetBuilder
+        +Run()
+        +CollectEvery5Min()
+    }
+
+    class MetricsCollector {
+        -promClient : PromAPI
+        -k8sClient : Clientset
+        +GetPodMetrics() MetricData
+        +QueryPrometheus() float64
+    }
+
+    class LogsCollector {
+        -k8sClient : Clientset
+        +CollectAllPodsLogs() PodLogStats
+        +ParseErrors() int
+    }
+
+    class DatasetBuilder {
+        +CollectUnifiedData() DataPoint[]
+        +WriteToCSV() error
+        +MergeMetricsAndLogs() DataPoint
+    }
+
+    %% Phase 2: ML Training
+    class MLTrainingService {
+        <<Python>>
+        +LoadDataset() DataFrame
+        +TrainModel() Model
+        +EvaluateModel() Metrics
+        +SaveModel() error
+    }
+
+    class AnomalyDetector {
+        <<IsolationForest>>
+        +Fit() void
+        +Predict() bool
+        +Score() float64
+    }
+
+    %% Phase 3: Self-Healing Controller
+    class HealingController {
+        -k8sClient : Clientset
+        -promClient : PromAPI
+        -model : AnomalyDetector
+        +Run()
+        +MonitorLoop()
+        +TakeAction()
+    }
+
+    class StateObserver {
+        +ObserveCluster() ClusterState
+        +GetMetrics() Metrics
+        +GetLogs() LogStats
+    }
+
+    class ActionExecutor {
+        +RestartPod() error
+        +ScaleDeployment() error
+        +RollbackDeployment() error
+    }
+
+    class DecisionEngine {
+        +AnalyzeState() Decision
+        +PredictAnomaly() bool
+        +SelectAction() Action
+    }
+
+    %% Data Models
+    class UnifiedDataPoint {
+        +Timestamp : time
+        +CPUUsage : float64
+        +MemoryUsage : float64
+        +ErrorRate : float64
+        +IsHealthy : bool
+    }
+
+    class ClusterState {
+        +PodMetrics : map
+        +LogStats : map
+        +Timestamp : time
+    }
+
+    %% Relationships - Phase 1
+    DataCollector --> MetricsCollector
+    DataCollector --> LogsCollector
+    DataCollector --> DatasetBuilder
+    DatasetBuilder ..> UnifiedDataPoint : Produces
+
+    %% Relationships - Phase 2
+    MLTrainingService --> UnifiedDataPoint : Consumes
+    MLTrainingService --> AnomalyDetector : Creates
+
+    %% Relationships - Phase 3
+    HealingController --> StateObserver
+    HealingController --> DecisionEngine
+    HealingController --> ActionExecutor
+    StateObserver ..> ClusterState : Produces
+    DecisionEngine --> AnomalyDetector : Uses
+    DecisionEngine --> ClusterState : Analyzes

@@ -1,0 +1,70 @@
+flowchart TB
+    subgraph K8s["Kubernetes Cluster"]
+        subgraph Monitoring["Monitoring Namespace"]
+            PROM[(Prometheus<br/>Server)]
+            NE[Node Exporter]
+            GRAF[Grafana<br/>Dashboard]
+        end
+        
+        subgraph System["AutoKube Namespace"]
+            DC[Data Collector<br/>Go Service]
+            ML[ML Training<br/>Python Service]
+            CTRL[Healing Controller<br/>Go Service]
+        end
+        
+        subgraph Default["Default Namespace"]
+            APP1[Target App 1<br/>Node.js]
+            APP2[Target App 2<br/>Go]
+            APPN[Target App N<br/>...]
+        end
+        
+        API[K8s API Server]
+    end
+    
+    subgraph Storage["Persistent Storage"]
+        CSV[Training Datasets<br/>CSV Files]
+        MODEL[Trained Models<br/>pkl/joblib]
+    end
+    
+    subgraph External["Development"]
+        DEV[DevOps Engineer]
+    end
+    
+    %% Monitoring Setup
+    NE -->|Node Metrics| PROM
+    APP1 -->|App Metrics| PROM
+    APP2 -->|App Metrics| PROM
+    APPN -->|App Metrics| PROM
+    PROM -->|Visualize| GRAF
+    
+    %% Phase 1: Data Collection
+    DC -->|Query Metrics| PROM
+    DC -->|Get Logs & Pod Info| API
+    DC -->|Write Dataset| CSV
+    
+    %% Phase 2: ML Training
+    ML -->|Read Dataset| CSV
+    ML -->|Train Model| MODEL
+    
+    %% Phase 3: Self-Healing
+    CTRL -->|Query Metrics| PROM
+    CTRL -->|Get Logs| API
+    CTRL -->|Load Model| MODEL
+    CTRL -->|Predict Anomaly| CTRL
+    CTRL -->|Restart Pod/Scale| API
+    API -->|Execute Action| APP1
+    API -->|Execute Action| APP2
+    API -->|Execute Action| APPN
+    
+    %% Human Oversight
+    DEV -->|Configure Thresholds| CTRL
+    DEV -->|Monitor| GRAF
+    DEV -->|Review Datasets| CSV
+    DEV -->|Validate Models| MODEL
+    
+    style DC fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style ML fill:#9B59B6,stroke:#6C3483,color:#fff
+    style CTRL fill:#E67E22,stroke:#A04000,color:#fff
+    style PROM fill:#E24A4A,stroke:#8A2E2E,color:#fff
+    style CSV fill:#4AE290,stroke:#2E8A5C,color:#fff
+    style MODEL fill:#F39C12,stroke:#B9770E,color:#fff

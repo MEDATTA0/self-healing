@@ -1,0 +1,89 @@
+flowchart TD
+    Start([AutoKube System]) --> Phase{Select Phase}
+    
+    %% PHASE 1: DATA COLLECTION
+    Phase -->|Phase 1| P1Start[Data Collection]
+    P1Start --> InitDC[Initialize Data Collector]
+    InitDC --> StartTimer[Start 5min Timer]
+    
+    StartTimer --> Collect[Collect Unified Data]
+    Collect --> GetPods[List All Pods]
+    GetPods --> GetMetrics[Query Prometheus Metrics]
+    GetMetrics --> GetLogs[Fetch Pod Logs]
+    GetLogs --> ParseLogs[Parse Errors & Requests]
+    
+    ParseLogs --> Merge[Merge Metrics + Logs]
+    Merge --> Enrich[Add Pod Metadata]
+    Enrich --> Label{Labeling Logic}
+    
+    Label -->|High Error Rate| Unhealthy[Mark: IsHealthy=false]
+    Label -->|High CPU/Memory| Unhealthy
+    Label -->|Frequent Restarts| Unhealthy
+    Label -->|Normal Behavior| Healthy[Mark: IsHealthy=true]
+    
+    Unhealthy --> WriteCSV[Append to CSV]
+    Healthy --> WriteCSV
+    WriteCSV --> LogSuccess[Log: N points collected]
+    LogSuccess --> Wait1[Wait 5 minutes]
+    Wait1 --> Collect
+    
+    %% PHASE 2: ML TRAINING
+    Phase -->|Phase 2| P2Start[ML Training]
+    P2Start --> LoadData[Load Training Dataset]
+    LoadData --> ValidateData{Sufficient Data?}
+    ValidateData -->|No| WaitMore[Wait for more data]
+    WaitMore --> LoadData
+    ValidateData -->|Yes| FeatureEng[Feature Engineering]
+    
+    FeatureEng --> SplitData[Train/Test Split]
+    SplitData --> TrainModel[Train IsolationForest]
+    TrainModel --> Evaluate[Evaluate Model]
+    Evaluate --> CheckPerf{Performance OK?}
+    
+    CheckPerf -->|No| TuneParams[Tune Hyperparameters]
+    TuneParams --> TrainModel
+    CheckPerf -->|Yes| SaveModel[Save Model to Storage]
+    SaveModel --> NotifyDevs[Notify DevOps Team]
+    
+    %% PHASE 3: SELF-HEALING
+    Phase -->|Phase 3| P3Start[Self-Healing Controller]
+    P3Start --> LoadModel[Load Trained Model]
+    LoadModel --> InitCtrl[Initialize Controller]
+    InitCtrl --> MonitorLoop[Start Monitor Loop]
+    
+    MonitorLoop --> ObserveState[Observe Cluster State]
+    ObserveState --> CollectCurrent[Get Current Metrics & Logs]
+    CollectCurrent --> BuildVector[Build State Vector]
+    BuildVector --> Predict[Predict with ML Model]
+    
+    Predict --> Analyze{Anomaly Detected?}
+    
+    Analyze -->|No Anomaly| ContinueMonitor[Continue Monitoring]
+    ContinueMonitor --> Wait2[Wait 30 seconds]
+    Wait2 --> ObserveState
+    
+    Analyze -->|Anomaly Found| SelectAction{Select Healing Action}
+    
+    SelectAction -->|High Error Rate| RestartPod[Restart Pod]
+    SelectAction -->|Resource Spike| ScaleUp[Scale Deployment Up]
+    SelectAction -->|Memory Leak| RestartPod
+    SelectAction -->|Performance Degr.| Rollback[Rollback Deployment]
+    
+    RestartPod --> ExecuteK8s[Execute via K8s API]
+    ScaleUp --> ExecuteK8s
+    Rollback --> ExecuteK8s
+    
+    ExecuteK8s --> LogAction[Log Healing Action]
+    LogAction --> AlertDevs[Alert DevOps if Critical]
+    AlertDevs --> Wait2
+    
+    %% Styling
+    style P1Start fill:#4A90E2,color:#fff
+    style P2Start fill:#9B59B6,color:#fff
+    style P3Start fill:#E67E22,color:#fff
+    style Unhealthy fill:#E74C3C,color:#fff
+    style Healthy fill:#2ECC71,color:#fff
+    style WriteCSV fill:#27AE60,color:#fff
+    style SaveModel fill:#F39C12,color:#fff
+    style RestartPod fill:#E67E22,color:#fff
+    style ScaleUp fill:#3498DB,color:#fff
