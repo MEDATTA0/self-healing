@@ -1,15 +1,19 @@
 package internals
 
 import (
+	"bufio"
 	"context"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"os"
+	"regexp"
 	"sort"
 	"time"
 
 	"github.com/prometheus/client_golang/api"
-	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	promV1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	k8sV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/prometheus/common/model"
@@ -18,7 +22,7 @@ import (
 )
 
 type MetricsCollector struct {
-	promClient v1.API
+	promClient promV1.API
 	k8sClient  *kubernetes.Clientset
 	cron       *cron.Cron
 }
@@ -28,7 +32,7 @@ func NewMetricsCollector(k8sClient *kubernetes.Clientset) *MetricsCollector {
 	client, _ := api.NewClient(api.Config{
 		Address: "http://localhost:9090",
 	})
-	apiV1 := v1.NewAPI(client)
+	apiV1 := promV1.NewAPI(client)
 
 	return &MetricsCollector{
 		promClient: apiV1,
@@ -70,7 +74,7 @@ func (this *MetricsCollector) CreateMetricsBackup(deploymentName string) {
 		{"lMem", fmt.Sprintf("sum(kube_pod_container_resource_limits{pod=~'%s-.*', resource='memory'}) by (pod)", deploymentName)},
 	}
 
-	dateRange := v1.Range{
+	dateRange := promV1.Range{
 		Start: time.Now().Add(-7 * 24 * time.Hour).UTC(),
 		End:   time.Now().UTC(),
 		Step:  10 * time.Minute, // Increased step to keep file size sane
@@ -132,7 +136,6 @@ func (this *MetricsCollector) CreateMetricsBackup(deploymentName string) {
 	defer file.Close()
 	writer := csv.NewWriter(file)
 	writer.WriteAll(allValues)
-	writer.Flush()
 	fmt.Println("Backup complete: training_data.csv")
 }
 
