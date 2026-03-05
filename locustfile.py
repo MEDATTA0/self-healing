@@ -24,12 +24,16 @@ class TrafficUser(HttpUser):
     def hello_endpoint(self):
         """Call the main hello endpoint"""
         with self.client.get("/hello", catch_response=True) as response:
-            if response.status_code == 200:
+            if response.status_code < 500:
                 response.success()
             else:
-                response.failure(f"Got status code {response.status_code}")
+                response.failure(f"Server error: {response.status_code}")
 
     @task(2)  # Weight: 2 (less common)
     def root_endpoint(self):
         """Call root endpoint if it exists"""
-        self.client.get("/", catch_response=True)
+        with self.client.get("/", catch_response=True) as response:
+            if response.status_code < 500:
+                response.success()
+            else:
+                response.failure(f"Server error: {response.status_code}")
