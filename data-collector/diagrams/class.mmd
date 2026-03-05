@@ -1,0 +1,50 @@
+classDiagram
+    class DataCollector {
+        +main()
+        +HandleHealth()
+    }
+
+    class MetricsCollector {
+        -promClient : PromAPI
+        -k8sClient : Clientset
+        +Watch()
+        +GetPodMetrics() MetricData
+        +CreateMetricsBackup()
+    }
+
+    class LogsCollector {
+        -k8sClient : Clientset
+        +CollectAllPodsLogs() map
+        +ParseLogErrors() PodLogStats
+        +CountErrors() int
+    }
+
+    class DatasetBuilder {
+        -metricsCollector : MetricsCollector
+        -logsCollector : LogsCollector
+        +CollectUnifiedData() UnifiedDataPoint[]
+        +WriteToCSV() error
+    }
+
+    class K8sService {
+        -k8sClient : Clientset
+        +GetPods() PodInfo[]
+        +GetNodes() NodeInfo[]
+    }
+
+    class UnifiedDataPoint {
+        +Timestamp : time
+        +CPUUsage : float64
+        +MemoryUsage : float64
+        +ErrorRate : float64
+        +RestartCount : int32
+        +IsHealthy : bool
+    }
+
+    DataCollector --> MetricsCollector : Creates
+    DataCollector --> LogsCollector : Creates
+    DataCollector --> DatasetBuilder : Creates
+    DataCollector --> K8sService : Creates
+    DatasetBuilder --> MetricsCollector : Uses
+    DatasetBuilder --> LogsCollector : Uses
+    DatasetBuilder ..> UnifiedDataPoint : Produces

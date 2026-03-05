@@ -1,0 +1,37 @@
+flowchart TD
+    Start([Data Collector Starts]) --> Init[Initialize Components]
+    Init --> MC[MetricsCollector.Watch]
+    Init --> MLT[MLTalker.Watch]
+    Init --> HTTP[Start HTTP Server :1323]
+    Init --> Timer[Start 5min Timer]
+    
+    Timer --> Collect[Collect Unified Data]
+    
+    Collect --> GetPods[Get All Pods from K8s]
+    GetPods --> GetMetrics[Query Prometheus Metrics]
+    GetMetrics --> GetLogs[Fetch Pod Logs]
+    GetLogs --> Parse[Parse Logs for Errors]
+    
+    Parse --> Merge[Merge Metrics + Logs]
+    Merge --> Enrich[Enrich with Pod Metadata]
+    Enrich --> Label{Label Data Points}
+    
+    Label -->|High Error Rate| Unhealthy[Mark: IsHealthy=false]
+    Label -->|High Restarts| Unhealthy
+    Label -->|Normal| Healthy[Mark: IsHealthy=true]
+    
+    Unhealthy --> Write[Write to CSV]
+    Healthy --> Write
+    
+    Write --> Log[Log: Collected N points]
+    Log --> Wait[Wait 5 minutes]
+    Wait --> Collect
+    
+    HTTP --> API1[GET /health]
+    HTTP --> API2[GET /k8s/pods]
+    HTTP --> API3[GET /k8s/nodes]
+    
+    style Start fill:#4A90E2,color:#fff
+    style Write fill:#4AE290,color:#fff
+    style Unhealthy fill:#E24A4A,color:#fff
+    style Healthy fill:#90E24A,color:#000

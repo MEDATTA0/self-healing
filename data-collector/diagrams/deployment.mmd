@@ -1,0 +1,31 @@
+flowchart TB
+    subgraph K8s["Kubernetes Cluster"]
+        subgraph Monitoring["Monitoring Namespace"]
+            PROM[(Prometheus<br/>Server)]
+            NE[Node Exporter]
+        end
+        
+        subgraph Default["Default Namespace"]
+            DC[Data Collector<br/>Go Service]
+            APP1[Target App 1<br/>Node.js]
+            APP2[Target App 2<br/>Go]
+        end
+        
+        API[K8s API Server]
+    end
+    
+    subgraph Storage["Persistent Storage"]
+        CSV[CSV Files<br/>training_data.csv<br/>ml_training_dataset.csv]
+    end
+    
+    NE -->|Export Node Metrics| PROM
+    APP1 -->|Expose Metrics| PROM
+    APP2 -->|Expose Metrics| PROM
+    
+    DC -->|Query Metrics| PROM
+    DC -->|Get Pod Info & Logs| API
+    DC -->|Write Datasets| CSV
+    
+    style DC fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style PROM fill:#E24A4A,stroke:#8A2E2E,color:#fff
+    style CSV fill:#4AE290,stroke:#2E8A5C,color:#fff

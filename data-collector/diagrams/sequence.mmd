@@ -1,0 +1,48 @@
+sequenceDiagram
+    autonumber
+    participant T as Ticker (5 min)
+    participant DC as Data Collector
+    participant MC as Metrics Collector
+    participant LC as Logs Collector
+    participant DB as Dataset Builder
+    participant P as Prometheus
+    participant K as K8s API
+    participant CSV as CSV File
+
+    Note over T, CSV: Data Collection Cycle
+
+    T->>DC: Trigger Collection
+    DC->>DB: CollectUnifiedData(5min)
+    
+    rect rgb(180, 210, 240)
+        Note right of DB: Phase 1: Collect Metrics
+        DB->>K: List Pods (default namespace)
+        K-->>DB: Pod List
+        DB->>MC: GetPodMetrics()
+        MC->>P: Query container_cpu_usage
+        P-->>MC: CPU: 0.45 cores
+        MC->>P: Query container_memory_usage
+        P-->>MC: Memory: 128 MB
+        MC-->>DB: Metrics Data
+    end
+
+    rect rgb(255, 220, 180)
+        Note right of DB: Phase 2: Collect Logs
+        DB->>LC: CollectAllPodsLogs(since 5m)
+        LC->>K: GetLogs for each pod
+        K-->>LC: Raw Logs
+        LC->>LC: Parse logs (count errors)
+        LC-->>DB: LogStats {errors: 12, requests: 450}
+    end
+
+    rect rgb(180, 240, 180)
+        Note right of DB: Phase 3: Build Dataset
+        DB->>DB: Merge Metrics + Logs
+        DB->>DB: Calculate error rate, CPU%
+        DB->>DB: Label data (IsHealthy)
+        DB->>CSV: WriteToCSV(dataPoints)
+        CSV-->>DB: ✓ Written
+    end
+    
+    DB-->>DC: Success (N points)
+    DC-->>T: Wait for next cycle
