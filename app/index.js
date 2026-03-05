@@ -1,12 +1,32 @@
 import express from "express";
-import morgan from "morgan";
 import cors from "cors";
 
 const PORT = 3000;
 const app = express();
 
 app.use(cors({ origin: "*" }));
-app.use(morgan("combined"));
+
+// JSON logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    const logEntry = {
+      time: new Date().toISOString(),
+      level: "info",
+      msg: "Request completed",
+      method: req.method,
+      status_code: res.statusCode,
+      path: req.url,
+      user_agent: req.get("user-agent") || "",
+      duration: `${duration}ms`,
+    };
+    console.log(JSON.stringify(logEntry));
+  });
+  
+  next();
+});
 
 app.get("/hello", (req, res) => {
   let i = 1e4;
