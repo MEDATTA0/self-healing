@@ -42,10 +42,10 @@ func NewMetricsCollector(k8sClient *kubernetes.Clientset) *MetricsCollector {
 }
 
 func (this *MetricsCollector) Watch() {
-	// this.watchDeploymentMetrics()
+	// Watch pod metrics every 30 seconds
 	this.watchPodMetrics()
-	this.CreateMetricsBackup("my-app")
 	this.cron.Start()
+	fmt.Println("✓ MetricsCollector started - collecting every 30s")
 }
 
 type MetricRow struct {
@@ -171,8 +171,6 @@ func (this *MetricsCollector) watchDeploymentMetrics() {
 	}
 }
 
-/*
- */
 func (this *MetricsCollector) watchPodMetrics() {
 	_, err := this.cron.AddFunc("@every 30s", func() {
 		ctx := context.Background()
@@ -261,4 +259,9 @@ func (this *MetricsCollector) getPodResourceMetrics(containerName string) (usage
 		}
 	}
 	return results["uCpu"], results["lCpu"], results["uMem"], results["lMem"]
+}
+
+// GetPodResourceMetrics is a public wrapper for getPodResourceMetrics
+func (this *MetricsCollector) GetPodResourceMetrics(containerName string) (usageCpu, limitCpu, usageMem, limitMem float64) {
+	return this.getPodResourceMetrics(containerName)
 }
