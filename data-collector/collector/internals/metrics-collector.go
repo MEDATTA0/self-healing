@@ -57,6 +57,67 @@ type MetricRow struct {
 	LMem      string
 }
 
+type LogRow struct {
+	Timestamp  string
+	PodName    string
+	ErrorRates int
+}
+
+func (this *MetricsCollector) GetK8sLogs() {
+	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	defer cancel()
+	pods, err := this.k8sClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("Error fetching pods: %v\n", err)
+		return
+	}
+	// logs := make(map[string]map)
+
+	since := time.Now().Add(-1 * time.Second)
+	for _, pod := range pods.Items {
+
+		req := this.k8sClient.CoreV1().Pods("default").GetLogs(pod.Name, &k8sV1.PodLogOptions{SinceTime: &metav1.Time{Time: since}})
+		ctx := context.TODO()
+		podLogs, err := req.Stream(ctx)
+		if err != nil {
+			fmt.Printf("Error getting pod %s logs: %v\n", pod.Name, err)
+		}
+		defer podLogs.Close()
+		w, err := os.Create("logs.txt")
+		if err != nil {
+			fmt.Printf("Error while create a logs file: %v\n", err)
+			_, err = io.Copy(os.Stdout, podLogs)
+			return
+		}
+		defer w.Close()
+
+		reader := bufio.NewScanner(podLogs)
+		for reader.Scan() {
+			line := reader.Text()
+			timestampRegex := regexp.MustCompile(`(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2}:\d{2}Z)`)
+			statusCodeRegex := regexp.MustCompile(`statusCode: (\d+)`)
+			matches := timestampRegex.FindStringSubmatch(line)
+			statusCode := statusCodeRegex.FindString(line)
+			// var logRow LogRow
+			if statusCode != "" {
+			}
+			if len(matches) > 0 {
+			}
+			// if logs[]
+			fmt.Println(reader.Text())
+
+		}
+
+		_, err = io.Copy(w, podLogs)
+		if err != nil {
+			fmt.Printf("Error while copying logs: %v\n", err)
+		}
+		fmt.Println("Successfully written to logs.txt")
+
+		// pkg.Debug(podLogs)
+	}
+}
+
 func (this *MetricsCollector) CreateMetricsBackup(deploymentName string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
