@@ -83,7 +83,7 @@ func (lc *LogsCollector) ParseHTTPLog(line string) (*HTTPLogEntry, error) {
 			if err != nil {
 				timestamp = time.Now()
 			}
-			
+
 			// Parse duration (e.g., "15ms" -> 15.0)
 			duration := 0.0
 			if jsonLog.Duration != "" {
@@ -95,7 +95,7 @@ func (lc *LogsCollector) ParseHTTPLog(line string) (*HTTPLogEntry, error) {
 					}
 				}
 			}
-			
+
 			return &HTTPLogEntry{
 				Timestamp:  timestamp,
 				Method:     jsonLog.Method,
@@ -107,7 +107,7 @@ func (lc *LogsCollector) ParseHTTPLog(line string) (*HTTPLogEntry, error) {
 			}, nil
 		}
 	}
-	
+
 	// Fall back to Combined Log Format
 	matches := httpLogPattern.FindStringSubmatch(line)
 	if matches == nil {
@@ -121,7 +121,7 @@ func (lc *LogsCollector) ParseHTTPLog(line string) (*HTTPLogEntry, error) {
 	}
 
 	statusCode, _ := strconv.Atoi(matches[5])
-	
+
 	bytesSent := 0
 	if matches[6] != "-" {
 		bytesSent, _ = strconv.Atoi(matches[6])
