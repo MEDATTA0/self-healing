@@ -178,55 +178,60 @@ func (lc *LogsCollector) CollectPodLogs(podName string, sinceTime time.Time) (*P
 			responseTimes = append(responseTimes, entry.Duration)
 		}
 
-	// Classify errors (only 5xx counts as errors for self-healing)
-	if entry.StatusCode >= 400 && entry.StatusCode < 500 {
-		stats.ClientErrors++
-		// 4xx are client errors, don't count toward ErrorCount
-	} else if entry.StatusCode >= 500 {
-		stats.ServerErrors++
-		stats.ErrorCount++ // Only server errors count
-	}
-
-	// Calculate error rate
-	if stats.TotalRequests > 0 {
-		stats.ErrorRate = (float64(stats.ErrorCount) / float64(stats.TotalRequests)) * 100.0
-	}
-
-	// Calculate request rate (requests per second over the time window)
-	duration := time.Since(sinceTime).Seconds()
-	if duration > 0 {
-		stats.RequestRate = float64(stats.TotalRequests) / duration
-	}
-
-	// Calculate average response time
-	if len(responseTimes) > 0 {
-		sum := 0.0
-		for _, rt := range responseTimes {
-			sum += rt
+		// Classify errors (only 5xx counts as errors for self-healing)
+		if entry.StatusCode >= 400 && entry.StatusCode < 500 {
+			stats.ClientErrors++
+			// 4xx are client errors, don't count toward ErrorCount
+		} else if entry.StatusCode >= 500 {
+			stats.ServerErrors++
+			stats.ErrorCount++ // Only server errors count
 		}
-		stats.AvgResponseTime = sum / float64(len(responseTimes))
 
-		// Calculate p95 response time
-		if len(responseTimes) > 1 {
-			// Sort response times
-			sortedTimes := make([]float64, len(responseTimes))
-			copy(sortedTimes, responseTimes)
-			// Simple bubble sort for small arrays
-			for i := 0; i < len(sortedTimes); i++ {
-				for j := i + 1; j < len(sortedTimes); j++ {
-					if sortedTimes[i] > sortedTimes[j] {
-						sortedTimes[i], sortedTimes[j] = sortedTimes[j], sortedTimes[i]
+		// Calculate error rate
+		if stats.TotalRequests > 0 {
+			stats.ErrorRate = (float64(stats.ErrorCount) / float64(stats.TotalRequests)) * 100.0
+		}
+
+		// Calculate request rate (requests per second over the time window)
+		duration := time.Since(sinceTime).Seconds()
+		if duration > 0 {
+			stats.RequestRate = float64(stats.TotalRequests) / duration
+		}
+
+		// Calculate average response time
+		if len(responseTimes) > 0 {
+			sum := 0.0
+			for _, rt := range responseTimes {
+				sum += rt
+			}
+			stats.AvgResponseTime = sum / float64(len(responseTimes))
+
+			// Calculate p95 response time
+			if len(responseTimes) > 1 {
+				// Sort response times
+				sortedTimes := make([]float64, len(responseTimes))
+				copy(sortedTimes, responseTimes)
+				// Simple bubble sort for small arrays
+				for i := 0; i < len(sortedTimes); i++ {
+					for j := i + 1; j < len(sortedTimes); j++ {
+						if sortedTimes[i] > sortedTimes[j] {
+							sortedTimes[i], sortedTimes[j] = sortedTimes[j], sortedTimes[i]
+						}
 					}
 				}
+				p95Index := int(float64(len(sortedTimes)) * 0.95)
+				if p95Index >= len(sortedTimes) {
+					p95Index = len(sortedTimes) - 1
+				}
+				stats.P95ResponseTime = sortedTimes[p95Index]
+			} else {
+				stats.P95ResponseTime = stats.AvgResponseTime
 			}
-			p95Index := int(float64(len(sortedTimes)) * 0.95)
-			if p95Index >= len(sortedTimes) {
-				p95Index = len(sortedTimes) - 1
-			}
-			stats.P95ResponseTime = sortedTimes[p95Index]
-		} else {
-			stats.P95ResponseTime = stats.AvgResponseTime
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error scanning pod logs: %v", err)
 	}
 
 	return stats, nil
