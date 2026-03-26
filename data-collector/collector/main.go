@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/MEDATTA0/collector/internals"
 	"github.com/MEDATTA0/collector/pkg"
@@ -29,6 +30,7 @@ type CollectResponseDto struct {
 }
 
 var globalDatasetBuilder *internals.DatasetBuilder
+var globalMLTalker *internals.MLTalker
 
 func handleCollect(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -52,6 +54,10 @@ func handleCollect(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("Failed to write CSV: %v", err)})
 		return
+	}
+
+	if globalMLTalker != nil {
+		globalMLTalker.EvaluateAndHeal(dataPoints)
 	}
 
 	fmt.Printf("✓ Manual collection: %d unified data points\n", len(dataPoints))
@@ -82,6 +88,7 @@ func main() {
 	logsCollector := internals.NewLogsCollector(k8sClient)
 	datasetBuilder := internals.NewDatasetBuilder(k8sClient, metricsCollector, logsCollector)
 	globalDatasetBuilder = datasetBuilder // Set global for HTTP handler
+	globalMLTalker = mlTalker
 
 	mlTalker.Watch()
 	metricsCollector.Watch()
@@ -100,6 +107,7 @@ func main() {
 				fmt.Printf("Error writing initial dataset: %v\n", err)
 			} else {
 				fmt.Printf("✓ Initial collection: %d unified data points\n", len(dataPoints))
+				mlTalker.EvaluateAndHeal(dataPoints)
 			}
 		}
 
@@ -119,6 +127,7 @@ func main() {
 				fmt.Printf("Error writing dataset: %v\n", err)
 			} else {
 				fmt.Printf("✓ Collected %d unified data points\n", len(dataPoints))
+				mlTalker.EvaluateAndHeal(dataPoints)
 			}
 		}
 	}()
