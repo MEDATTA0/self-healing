@@ -11,3 +11,8 @@ __pycache__
 node-setup
 
 **.sh
+
+**.pkl
+**/.venv
+
+**.md
