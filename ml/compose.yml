@@ -1,0 +1,10 @@
+name: self-healing
+
+services:
+  ml:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8010:8010
+    restart: unless-stopped
