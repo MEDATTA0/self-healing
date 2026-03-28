@@ -1,9 +1,9 @@
 # Dockerfile inspired by https://docs.docker.com/guides/go-prometheus-monitoring/containerize/
 
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 RUN apk update && \
-    apk install -y curl 
+    apk add --no-cache curl
 
 # Set environment variables
 ENV CGO_ENABLED=0 \
@@ -32,7 +32,7 @@ FROM alpine:3.21 AS final
 COPY --from=builder /app /go-app/app
 
 # Expose the application's port
-EXPOSE 1324
+EXPOSE 1323
 
 # Run the application
 CMD [ "/go-app/app" ]

@@ -175,6 +175,7 @@ def root() -> dict:
         "status": "ok",
         "predict_endpoint": "/predict",
         "health_only_endpoint": "/predict/health-only",
+        "swagger_api_documentation": "/docs"
     }
 
 
