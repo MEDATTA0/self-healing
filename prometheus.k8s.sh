@@ -13,4 +13,4 @@ helm install prometheus prometheus-community/kube-prometheus-stack --namespace m
 kubectl --namespace monitoring get pods
 kubectl --namespace monitoring get svc
 
-kubectl port-forward -n monitoring svc/prom-stack-kube-prometheus-prometheus 9090:9090
+kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
