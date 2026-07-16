@@ -15,15 +15,15 @@ rules:
     resources: ["deployments"]
     verbs: ["get", "list", "watch", "delete"]
 
-  - apiGroup: []
+  - apiGroups: [""]
     resources: ["nodes"]
     verbs: ["get", "list", "watch"]
 
-  - apiGroups: []
+  - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
 
-  - apiGroup: []
+  - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get", "list"]
 
