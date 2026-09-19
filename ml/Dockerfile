@@ -8,6 +8,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application source and models
 COPY api.py .
+COPY controllers/ ./controllers/
+COPY dto/ ./dto/
+COPY schemas/ ./schemas/
+COPY services/ ./services/
 COPY models/ ./models/
 
 EXPOSE 8010
