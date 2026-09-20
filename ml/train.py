@@ -29,37 +29,38 @@ Saved artefacts (ml/models/):
 """
 
 import json
-import joblib
 import warnings
+from pathlib import Path
+
+import joblib
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from pathlib import Path
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
-from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
+from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
+from sklearn.preprocessing import LabelEncoder
 
 warnings.filterwarnings("ignore")
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-BASE_DIR   = Path(__file__).parent
-DATA_DIR   = BASE_DIR / "dataset"
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "dataset"
 MODELS_DIR = BASE_DIR / "models"
 MODELS_DIR.mkdir(exist_ok=True)
 
-PERF_CSV  = DATA_DIR / "kubernetes_performance_metrics_dataset.csv"
+PERF_CSV = DATA_DIR / "kubernetes_performance_metrics_dataset.csv"
 ALLOC_CSV = DATA_DIR / "kubernetes_resource_allocation_dataset.csv"
 
 RANDOM_STATE = 42
-TEST_SIZE    = 0.20
-CV_FOLDS     = 5
+TEST_SIZE = 0.20
+CV_FOLDS = 5
 
 # ── 1. Load ────────────────────────────────────────────────────────────────────
 print("=" * 62)
 print("  Loading datasets")
 print("=" * 62)
 
-perf  = pd.read_csv(PERF_CSV)
+perf = pd.read_csv(PERF_CSV)
 alloc = pd.read_csv(ALLOC_CSV)
 
 print(f"  Performance  : {perf.shape[0]:,} rows x {perf.shape[1]} cols")
@@ -80,14 +81,18 @@ print("  Feature engineering")
 print("=" * 62)
 
 # Resource pressure ratios — the most direct self-healing signals
-df["cpu_pressure_ratio"]    = df["cpu_usage"]    / df["cpu_limit"].replace(0, np.nan)
+df["cpu_pressure_ratio"] = df["cpu_usage"] / df["cpu_limit"].replace(0, np.nan)
 df["memory_pressure_ratio"] = df["memory_usage"] / df["memory_limit"].replace(0, np.nan)
-df["cpu_overcommit_ratio"]  = df["cpu_request"]  / df["cpu_limit"].replace(0, np.nan)
-df["mem_overcommit_ratio"]  = df["memory_request"] / df["memory_limit"].replace(0, np.nan)
+df["cpu_overcommit_ratio"] = df["cpu_request"] / df["cpu_limit"].replace(0, np.nan)
+df["mem_overcommit_ratio"] = df["memory_request"] / df["memory_limit"].replace(
+    0, np.nan
+)
 df.fillna(0, inplace=True)
 
 # Convert scaling_event from string to int (TRUE → 1, FALSE → 0)
-df["scaling_event_int"] = (df["scaling_event"].astype(str).str.upper() == "TRUE").astype(int)
+df["scaling_event_int"] = (
+    df["scaling_event"].astype(str).str.upper() == "TRUE"
+).astype(int)
 
 # Encode categorical columns
 CAT_COLS = ["namespace_perf", "deployment_strategy", "scaling_policy"]
@@ -153,51 +158,58 @@ print("=" * 62)
 # the same rule-based approach used in data-collector/internals/dataset-builder.go.
 # This creates a genuinely learnable signal that the model can fit.
 
+
 # Model 1 label — health_state
 # Priority: critical > warning > normal
 def _health_label(row) -> str:
-    status  = row["pod_status"]
-    msg     = row["event_message"]
-    cpu_p   = row["cpu_pressure_ratio"]
-    mem_p   = row["memory_pressure_ratio"]
+    status = row["pod_status"]
+    msg = row["event_message"]
+    cpu_p = row["cpu_pressure_ratio"]
+    mem_p = row["memory_pressure_ratio"]
     restarts = row["restart_count"]
     node_cpu = row["node_cpu_usage"]
     node_mem = row["node_memory_usage"]
-    latency  = row["network_latency"]
+    latency = row["network_latency"]
 
     # critical: pod has crashed, OOM'd, or resources are exhausted
-    if (status in ("Failed", "Unknown")
-            or msg in ("OOMKilled", "Killed", "Failed")
-            or cpu_p > 1.0
-            or mem_p > 1.0
-            or restarts >= 7):
+    if (
+        status in ("Failed", "Unknown")
+        or msg in ("OOMKilled", "Killed", "Failed")
+        or cpu_p > 1.0
+        or mem_p > 1.0
+        or restarts >= 7
+    ):
         return "critical"
 
     # warning: pod is under stress but still alive
-    if (node_cpu > 70.0
-            or node_mem > 70.0
-            or latency > 150.0
-            or cpu_p > 0.75
-            or mem_p > 0.75
-            or restarts >= 3
-            or status == "Pending"):
+    if (
+        node_cpu > 70.0
+        or node_mem > 70.0
+        or latency > 150.0
+        or cpu_p > 0.75
+        or mem_p > 0.75
+        or restarts >= 3
+        or status == "Pending"
+    ):
         return "warning"
 
     return "normal"
+
 
 df["health_state"] = df.apply(_health_label, axis=1)
 
 print("\n  health_state distribution:")
 print(df["health_state"].value_counts().to_string())
 
+
 # Model 2 label — recommended_action
 # Priority order: investigate > restart_pod > scale_up > none
 def _action_label(row) -> str:
-    status   = row["pod_status"]
-    msg      = row["event_message"]
+    status = row["pod_status"]
+    msg = row["event_message"]
     restarts = row["restart_count"]
-    cpu_p    = row["cpu_pressure_ratio"]
-    mem_p    = row["memory_pressure_ratio"]
+    cpu_p = row["cpu_pressure_ratio"]
+    mem_p = row["memory_pressure_ratio"]
 
     # Unknown/Pending — state is unclear, human review first
     if status in ("Unknown", "Pending"):
@@ -217,6 +229,7 @@ def _action_label(row) -> str:
 
     return "none"
 
+
 df["recommended_action"] = df.apply(_action_label, axis=1)
 
 print("\n  recommended_action distribution:")
@@ -230,16 +243,17 @@ print("=" * 62)
 
 # We use health_state as the primary stratification key.
 X_train, X_test, idx_train, idx_test = train_test_split(
-    X, df.index,
+    X,
+    df.index,
     test_size=TEST_SIZE,
     random_state=RANDOM_STATE,
     stratify=df["health_state"],
 )
 
 y1_train = df.loc[idx_train, "health_state"]
-y1_test  = df.loc[idx_test,  "health_state"]
+y1_test = df.loc[idx_test, "health_state"]
 y2_train = df.loc[idx_train, "recommended_action"]
-y2_test  = df.loc[idx_test,  "recommended_action"]
+y2_test = df.loc[idx_test, "recommended_action"]
 
 print(f"  Train: {len(X_train):,}   Test: {len(X_test):,}")
 
@@ -284,7 +298,8 @@ def train_and_evaluate(
     )
 
     model.fit(
-        X_tr, y_tr_enc,
+        X_tr,
+        y_tr_enc,
         sample_weight=sample_weights,
         eval_set=[(X_te, y_te_enc)],
         verbose=False,
@@ -305,8 +320,10 @@ def train_and_evaluate(
     print(f"\n  Weighted F1: {weighted_f1:.4f}")
 
     # Top feature importances
-    imp = pd.Series(model.feature_importances_, index=FEATURES).sort_values(ascending=False)
-    print(f"\n  Top 10 features:")
+    imp = pd.Series(model.feature_importances_, index=FEATURES).sort_values(
+        ascending=False
+    )
+    print("\n  Top 10 features:")
     print(imp.head(10).to_string())
 
     return model
@@ -317,11 +334,13 @@ print("\n" + "=" * 62)
 print("  Model 1 — Health Classifier")
 print("=" * 62)
 
-health_le    = LabelEncoder()
+health_le = LabelEncoder()
 health_model = train_and_evaluate(
     "Health Classifier",
-    X_train, y1_train,
-    X_test,  y1_test,
+    X_train,
+    y1_train,
+    X_test,
+    y1_test,
     health_le,
 )
 
@@ -330,11 +349,13 @@ print("\n" + "=" * 62)
 print("  Model 2 — Action Classifier")
 print("=" * 62)
 
-action_le    = LabelEncoder()
+action_le = LabelEncoder()
 action_model = train_and_evaluate(
     "Action Classifier",
-    X_train, y2_train,
-    X_test,  y2_test,
+    X_train,
+    y2_train,
+    X_test,
+    y2_test,
     action_le,
 )
 
@@ -349,30 +370,52 @@ y2_full_enc = action_le.transform(df["recommended_action"])
 # Re-initialise models without early_stopping for CV (needs fixed n_estimators)
 health_model_cv = xgb.XGBClassifier(
     n_estimators=health_model.best_iteration + 1,
-    max_depth=6, learning_rate=0.05,
-    subsample=0.8, colsample_bytree=0.8,
-    min_child_weight=3, gamma=0.1,
-    reg_alpha=0.1, reg_lambda=1.0,
-    objective="multi:softprob", num_class=len(health_le.classes_),
-    eval_metric="mlogloss", random_state=RANDOM_STATE, n_jobs=-1,
+    max_depth=6,
+    learning_rate=0.05,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    min_child_weight=3,
+    gamma=0.1,
+    reg_alpha=0.1,
+    reg_lambda=1.0,
+    objective="multi:softprob",
+    num_class=len(health_le.classes_),
+    eval_metric="mlogloss",
+    random_state=RANDOM_STATE,
+    n_jobs=-1,
 )
 action_model_cv = xgb.XGBClassifier(
     n_estimators=action_model.best_iteration + 1,
-    max_depth=6, learning_rate=0.05,
-    subsample=0.8, colsample_bytree=0.8,
-    min_child_weight=3, gamma=0.1,
-    reg_alpha=0.1, reg_lambda=1.0,
-    objective="multi:softprob", num_class=len(action_le.classes_),
-    eval_metric="mlogloss", random_state=RANDOM_STATE, n_jobs=-1,
+    max_depth=6,
+    learning_rate=0.05,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    min_child_weight=3,
+    gamma=0.1,
+    reg_alpha=0.1,
+    reg_lambda=1.0,
+    objective="multi:softprob",
+    num_class=len(action_le.classes_),
+    eval_metric="mlogloss",
+    random_state=RANDOM_STATE,
+    n_jobs=-1,
 )
 
 cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
 
-h_scores = cross_val_score(health_model_cv, X, y1_full_enc, cv=cv, scoring="f1_weighted", n_jobs=-1)
-a_scores = cross_val_score(action_model_cv, X, y2_full_enc, cv=cv, scoring="f1_weighted", n_jobs=-1)
+h_scores = cross_val_score(
+    health_model_cv, X, y1_full_enc, cv=cv, scoring="f1_weighted", n_jobs=-1
+)
+a_scores = cross_val_score(
+    action_model_cv, X, y2_full_enc, cv=cv, scoring="f1_weighted", n_jobs=-1
+)
 
-print(f"\n  Health Classifier  F1(weighted): {h_scores.mean():.4f} ± {h_scores.std():.4f}")
-print(f"  Action Classifier  F1(weighted): {a_scores.mean():.4f} ± {a_scores.std():.4f}")
+print(
+    f"\n  Health Classifier  F1(weighted): {h_scores.mean():.4f} ± {h_scores.std():.4f}"
+)
+print(
+    f"  Action Classifier  F1(weighted): {a_scores.mean():.4f} ± {a_scores.std():.4f}"
+)
 
 # ── 11. Save artefacts ────────────────────────────────────────────────────────
 print("\n" + "=" * 62)
@@ -382,8 +425,8 @@ print("=" * 62)
 health_model.save_model(str(MODELS_DIR / "health_classifier.json"))
 action_model.save_model(str(MODELS_DIR / "action_classifier.json"))
 
-joblib.dump(health_le,              MODELS_DIR / "health_label_encoder.pkl")
-joblib.dump(action_le,              MODELS_DIR / "action_label_encoder.pkl")
+joblib.dump(health_le, MODELS_DIR / "health_label_encoder.pkl")
+joblib.dump(action_le, MODELS_DIR / "action_label_encoder.pkl")
 joblib.dump(feature_label_encoders, MODELS_DIR / "feature_label_encoders.pkl")
 
 with open(MODELS_DIR / "feature_names.json", "w") as f:
@@ -406,8 +449,8 @@ model_card = {
         "cv_f1_std": round(float(a_scores.std()), 4),
     },
     "features": FEATURES,
-    "train_rows": int(len(X_train)),
-    "test_rows":  int(len(X_test)),
+    "train_rows": len(X_train),
+    "test_rows": len(X_test),
 }
 
 with open(MODELS_DIR / "model_card.json", "w") as f:
